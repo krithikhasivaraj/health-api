@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 import json
 import os
-import datetime
 
 app = Flask(__name__)
 DATA_FILE = "health_data.json"
@@ -20,26 +19,8 @@ def save_health_data(data):
 
 @app.route('/health-data', methods=['GET'])
 def get_health_data():
-    """Return filtered health data based on startDate and endDate query parameters."""
-    data = load_health_data()
-
-    # Get startDate & endDate from query params
-    start_date = request.args.get("startDate")  # Example: "2024-02-01"
-    end_date = request.args.get("endDate")      # Example: "2024-02-07"
-
-    if start_date:
-        start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d")
-    if end_date:
-        end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d")
-
-    # Filter records by date
-    if isinstance(data, list):
-        data = [
-            record for record in data 
-            if start_date <= datetime.datetime.strptime(record["start_date"], "%Y-%m-%d") <= end_date
-        ]
-
-    return jsonify(data)
+    """Return stored health data."""
+    return jsonify(load_health_data())
 
 @app.route('/health-data', methods=['POST'])
 def update_health_data():
