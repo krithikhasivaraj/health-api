@@ -1,32 +1,29 @@
 from flask import Flask, request, jsonify
-import json
+from pymongo import MongoClient
 import os
 
 app = Flask(__name__)
-DATA_FILE = "health_data.json"
 
-def load_health_data():
-    """Load health data from a file."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as file:
-            return json.load(file)
-    return {}
-
-def save_health_data(data):
-    """Save health data to a file."""
-    with open(DATA_FILE, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
+# MongoDB connection
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")  # Use local or Atlas URI
+client = MongoClient(MONGO_URI)
+db = client.health_db  # Database name
+collection = db.health_data  # Collection name
 
 @app.route('/health-data', methods=['GET'])
 def get_health_data():
-    """Return stored health data."""
-    return jsonify(load_health_data())
+    """Return stored health data from MongoDB."""
+    data = list(collection.find({}, {"_id": 0}))  # Exclude MongoDB's default "_id" field
+    return jsonify(data)
 
 @app.route('/health-data', methods=['POST'])
 def update_health_data():
-    """Receive and store new health data."""
+    """Receive and store new health data in MongoDB."""
     data = request.json
-    save_health_data(data)
+    if not data:
+        return jsonify({"error": "Invalid data"}), 400
+
+    collection.insert_one(data)  # Store in MongoDB
     return jsonify({"message": "✅ Health data saved successfully!"}), 200
 
 if __name__ == '__main__':
