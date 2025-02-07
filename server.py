@@ -1,51 +1,67 @@
 from flask import Flask, request, jsonify
-from pymongo import MongoClient
+import json
+import os
 
 app = Flask(__name__)
 
-# Connect to MongoDB (Local or Cloud)
-MONGO_URI = "mongodb://localhost:27017"  # Change this if using MongoDB Atlas
-client = MongoClient(MONGO_URI)
+DATA_FILE = "all_users.json"  # Store all user data in one JSON file
 
-# Select database & collection
-db = client.health_data_db  # Database name
-collection = db.health_records  # Collection name
+# Ensure the file exists
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w") as f:
+        json.dump({}, f)  # Start with an empty JSON object
 
 @app.route("/health-data", methods=["POST"])
 def upload_health_data():
-    """Receives health data and saves it in MongoDB."""
+    """Receives health data from a user and appends it without overwriting."""
     data = request.json
     user_id = data.get("user_id")
 
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
 
-    for date, health_metrics in data["data"].items():
-        existing_entry = collection.find_one({"user_id": user_id, "date": date})
+    # Load existing data
+    with open(DATA_FILE, "r") as f:
+        all_users_data = json.load(f)
 
-        if existing_entry:
-            # Update the existing record
-            collection.update_one(
-                {"user_id": user_id, "date": date},
-                {"$set": {
-                    "step_count": existing_entry["step_count"] + health_metrics.get("step_count", 0),
-                    "distance": existing_entry["distance"] + health_metrics.get("distance", 0.0),
-                    "active_energy": existing_entry["active_energy"] + health_metrics.get("active_energy", 0.0),
-                    "avg_heart_rate": health_metrics.get("avg_heart_rate", existing_entry.get("avg_heart_rate")),
-                    "categories": health_metrics.get("categories", existing_entry.get("categories"))
-                }}
-            )
+    # If user does not exist, initialize their data
+    if user_id not in all_users_data:
+        all_users_data[user_id] = {}
+
+    # Merge new data with existing user data
+    for date, health_metrics in data["data"].items():
+        if date in all_users_data[user_id]:
+            # Sum step counts, distance, and active energy
+            all_users_data[user_id][date]["step_count"] += health_metrics.get("step_count", 0)
+            all_users_data[user_id][date]["distance"] += health_metrics.get("distance", 0.0)
+            all_users_data[user_id][date]["active_energy"] += health_metrics.get("active_energy", 0.0)
+
+            # Update heart rate (merge lists before averaging)
+            if "heart_rate" in health_metrics:
+                all_users_data[user_id][date]["heart_rate"].extend(health_metrics["heart_rate"])
+
+            # Merge categories
+            for category, values in health_metrics.get("categories", {}).items():
+                if category in all_users_data[user_id][date]["categories"]:
+                    all_users_data[user_id][date]["categories"][category].extend(values)
+                else:
+                    all_users_data[user_id][date]["categories"][category] = values
         else:
-            # Insert new record
-            collection.insert_one({
-                "user_id": user_id,
-                "date": date,
-                "step_count": health_metrics.get("step_count", 0),
-                "distance": health_metrics.get("distance", 0.0),
-                "avg_heart_rate": health_metrics.get("avg_heart_rate"),
-                "active_energy": health_metrics.get("active_energy", 0.0),
-                "categories": health_metrics.get("categories", {})
-            })
+            # If the date does not exist, add new data
+            all_users_data[user_id][date] = health_metrics
+
+    # Compute heart rate averages
+    for date, metrics in all_users_data[user_id].items():
+        if "heart_rate" in metrics and isinstance(metrics["heart_rate"], list):
+            if metrics["heart_rate"]:
+                metrics["avg_heart_rate"] = round(sum(metrics["heart_rate"]) / len(metrics["heart_rate"]), 2)
+            else:
+                metrics["avg_heart_rate"] = None
+            del metrics["heart_rate"]
+
+    # Save back to file
+    with open(DATA_FILE, "w") as f:
+        json.dump(all_users_data, f, indent=4)
 
     return jsonify({"message": f"✅ Data saved for user {user_id}"}), 200
 
@@ -57,18 +73,22 @@ def get_health_data():
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
 
-    user_records = list(collection.find({"user_id": user_id}, {"_id": 0}))  # Exclude MongoDB's _id field
+    # Load data
+    with open(DATA_FILE, "r") as f:
+        all_users_data = json.load(f)
 
-    if not user_records:
+    if user_id not in all_users_data:
         return jsonify({"error": "No data found for this user"}), 404
 
-    return jsonify({"user_id": user_id, "data": user_records})
+    return jsonify({"user_id": user_id, "data": all_users_data[user_id]})
 
 @app.route("/all-data", methods=["GET"])
 def get_all_users_data():
-    """Returns all health data from MongoDB."""
-    all_records = list(collection.find({}, {"_id": 0}))  # Exclude MongoDB's _id field
-    return jsonify({"all_users": all_records})
+    """Returns health data for all users."""
+    with open(DATA_FILE, "r") as f:
+        all_users_data = json.load(f)
+
+    return jsonify(all_users_data)
 
 if __name__ == "__main__":
     app.run(debug=True)
