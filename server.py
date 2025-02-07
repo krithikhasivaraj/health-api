@@ -1,33 +1,81 @@
 from flask import Flask, request, jsonify
-import json
+from pymongo import MongoClient
 import os
 
 app = Flask(__name__)
-DATA_FILE = "health_data.json"
 
-def load_health_data():
-    """Load health data from a file."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as file:
-            return json.load(file)
-    return {}
+# ✅ MongoDB Connection
+MONGO_URI = "mongodb://localhost:27017"  # Change if using MongoDB Atlas
+client = MongoClient(MONGO_URI)
 
-def save_health_data(data):
-    """Save health data to a file."""
-    with open(DATA_FILE, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
+# ✅ Select database & collection
+db = client.health_data  # Database name
+collection = db.health_records  # Collection name
 
-@app.route('/health-data', methods=['GET'])
+@app.route("/health-data", methods=["GET", "POST"])
+def health_data():
+    """Handles health data uploads and retrieval."""
+    
+    if request.method == "GET":
+        return jsonify({"message": "Use POST to upload health data"}), 200
+
+    elif request.method == "POST":
+        try:
+            data = request.json
+            print(f"📥 Received data: {data}")  # Debugging log
+
+            user_id = data.get("user_id")
+            health_data = data.get("data")
+
+            if not user_id or not health_data:
+                return jsonify({"error": "Missing user_id or data"}), 400
+
+            for date, health_metrics in health_data.items():
+                # ✅ Upsert: If record exists, update it; otherwise, insert new entry
+                collection.update_one(
+                    {"user_id": user_id, "date": date},  
+                    {"$set": health_metrics},  
+                    upsert=True
+                )
+
+            print(f"✅ Data successfully stored for user: {user_id}")
+            return jsonify({"message": f"✅ Data saved for user {user_id}"}), 200
+
+        except Exception as e:
+            print(f"❌ Error processing request: {str(e)}")
+            return jsonify({"error": "Internal server error"}), 500
+
+@app.route("/get-user-data", methods=["GET"])
 def get_health_data():
-    """Return stored health data."""
-    return jsonify(load_health_data())
+    """Fetches health data for a specific user from MongoDB."""
+    user_id = request.args.get("user_id")
 
-@app.route('/health-data', methods=['POST'])
-def update_health_data():
-    """Receive and store new health data."""
-    data = request.json
-    save_health_data(data)
-    return jsonify({"message": "✅ Health data saved successfully!"}), 200
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
 
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8080)
+    try:
+        user_records = list(
+            collection.find({"user_id": user_id}, {"_id": 0}).sort("date", 1)
+        )
+
+        if not user_records:
+            return jsonify({"error": f"No data found for user {user_id}"}), 404
+
+        return jsonify({"user_id": user_id, "data": user_records}), 200
+
+    except Exception as e:
+        print(f"❌ Error fetching data: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route("/all-data", methods=["GET"])
+def get_all_users_data():
+    """Fetches all health data from MongoDB."""
+    try:
+        all_records = list(collection.find({}, {"_id": 0}))
+        return jsonify({"all_users": all_records}), 200
+    except Exception as e:
+        print(f"❌ Error fetching all users' data: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)  # Allows external access
