@@ -12,41 +12,46 @@ client = MongoClient(MONGO_URI)
 db = client.health_data  # Database name
 collection = db.health_records  # Collection name
 
-@app.route("/health-data", methods=["POST"])
-def upload_health_data():
-    """Receives health data and saves it in MongoDB."""
-    data = request.json
-    user_id = data.get("user_id")
+@app.route("/health-data", methods=["GET", "POST"])
+def health_data():
+    """Handles both GET and POST requests for health data."""
+    
+    if request.method == "GET":
+        return jsonify({"message": "✅ Use /get-user-data?user_id=<user_id> to fetch specific user data"}), 200
 
-    if not user_id or "data" not in data:
-        return jsonify({"error": "Missing user_id or data"}), 400
+    elif request.method == "POST":
+        data = request.json
+        user_id = data.get("user_id")
 
-    records = []
+        if not user_id or "data" not in data:
+            return jsonify({"error": "Missing user_id or data"}), 400
 
-    for date, health_metrics in data["data"].items():
-        record = {
-            "user_id": user_id,
-            "date": date,
-            "step_count": health_metrics.get("step_count", 0),
-            "distance": health_metrics.get("distance", 0.0),
-            "active_energy": health_metrics.get("active_energy", 0.0),
-            "avg_heart_rate": health_metrics.get("avg_heart_rate"),
-            "categories": health_metrics.get("categories", {})
-        }
-        records.append(record)
+        records = []
 
-    try:
-        # ✅ Prevent duplicates: Update existing or insert new entries
-        for record in records:
-            collection.update_one(
-                {"user_id": record["user_id"], "date": record["date"]},  
-                {"$set": record},  
-                upsert=True  # If not found, insert it
-            )
+        for date, health_metrics in data["data"].items():
+            record = {
+                "user_id": user_id,
+                "date": date,
+                "step_count": health_metrics.get("step_count", 0),
+                "distance": health_metrics.get("distance", 0.0),
+                "active_energy": health_metrics.get("active_energy", 0.0),
+                "avg_heart_rate": health_metrics.get("avg_heart_rate"),
+                "categories": health_metrics.get("categories", {})
+            }
+            records.append(record)
 
-        return jsonify({"message": f"✅ Data successfully saved for user {user_id}"}), 200
-    except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        try:
+            # ✅ Prevent duplicates: Update existing or insert new entries
+            for record in records:
+                collection.update_one(
+                    {"user_id": record["user_id"], "date": record["date"]},  
+                    {"$set": record},  
+                    upsert=True  # If not found, insert it
+                )
+
+            return jsonify({"message": f"✅ Data successfully saved for user {user_id}"}), 200
+        except Exception as e:
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 @app.route("/get-user-data", methods=["GET"])
 def get_user_data():
