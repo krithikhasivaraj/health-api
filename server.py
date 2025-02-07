@@ -1,33 +1,33 @@
 from flask import Flask, request, jsonify
-import json
+from pymongo import MongoClient
 import os
 
 app = Flask(__name__)
-DATA_FILE = "health_data.json"
 
-def load_health_data():
-    """Load health data from a file."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as file:
-            return json.load(file)
-    return {}
-
-def save_health_data(data):
-    """Save health data to a file."""
-    with open(DATA_FILE, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
+# MongoDB connection
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")  # Use local or Atlas URI
+client = MongoClient(MONGO_URI)
+db = client.health_data  # Database name
+collection = db.health_records  # Collection name
 
 @app.route('/health-data', methods=['GET'])
 def get_health_data():
-    """Return stored health data."""
-    return jsonify(load_health_data())
+    """Fetch stored health data from MongoDB for a specific user."""
+    try:
+        user_id = request.args.get("user_id")  # Get user_id from query parameters
+        if not user_id:
+            return jsonify({"error": "Missing user_id parameter"}), 400
 
-@app.route('/health-data', methods=['POST'])
-def update_health_data():
-    """Receive and store new health data."""
-    data = request.json
-    save_health_data(data)
-    return jsonify({"message": "✅ Health data saved successfully!"}), 200
+        # Fetch health records for the given user_id
+        data = list(collection.find({"user_id": user_id}, {"_id": 0}))  # Exclude MongoDB's _id field
+
+        if not data:
+            return jsonify({"error": "No health data found for this user"}), 404
+
+        return jsonify(data), 200
+    except Exception as e:
+        print(f"❌ Error fetching data: {e}")
+        return jsonify({"error": "Failed to fetch health data"}), 500
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8080)
+    app.run(debug=True, host="0.0.0.0", port=8080)
