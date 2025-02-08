@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 # 🔹 Connect to MongoDB
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/health_data")  # Change this if using MongoDB Atlas
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongo:xiJkFNACIyLkGgMQJgiopyXGLbLDICHV@mongodb.railway.internal:27017")  # Change this if using MongoDB Atlas
 client = MongoClient(MONGO_URI)
 db = client.health_data  # Database name
 collection = db.health_records  # Collection name
