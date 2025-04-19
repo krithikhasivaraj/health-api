@@ -9,7 +9,7 @@ app = Flask(__name__)
 MONGO_URI = os.getenv("MONGODB_URI")  # Ensure this is correctly set in Railway
 
 try:
-    client = MongoClient(MONGO_URI, tls=True, tlsAllowInvalidCertificates=True)
+    client = MongoClient(MONGO_URI)  # ✅ Let pymongo auto-handle TLS
     db = client.health_data
     collection = db.health_records
     client.admin.command("ping")
@@ -17,6 +17,7 @@ try:
 except Exception as e:
     print(f"❌ MongoDB Connection Failed: {e}")
     traceback.print_exc()
+
 
 # === GET Route ===
 @app.route('/health-data', methods=['GET'])
