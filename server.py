@@ -101,4 +101,4 @@ def home():
 # === Run the server ===
 if __name__ == '__main__':
     print("🚀 Flask API is starting...")
-    app.run(debug=True, host="0.0.0.0", port=8080)
+    app.run(debug=True, host="0.0.0.0", port=5080)
