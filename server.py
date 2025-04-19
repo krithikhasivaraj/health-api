@@ -1,11 +1,12 @@
 from flask import Flask, request, jsonify
 from pymongo import MongoClient
 import os
+import traceback
 
 app = Flask(__name__)
 
 # === MongoDB Atlas Connection ===
-MONGO_URI = os.getenv("MONGODB_URI")  # Make sure this variable is set in Railway
+MONGO_URI = os.getenv("MONGODB_URI")  # Ensure this is correctly set in Railway
 
 try:
     client = MongoClient(MONGO_URI, tls=True, tlsAllowInvalidCertificates=True)
@@ -15,6 +16,7 @@ try:
     print("✅ Successfully connected to MongoDB Atlas!")
 except Exception as e:
     print(f"❌ MongoDB Connection Failed: {e}")
+    traceback.print_exc()
 
 # === GET Route ===
 @app.route('/health-data', methods=['GET'])
@@ -46,6 +48,7 @@ def get_health_data():
 
     except Exception as e:
         print(f"❌ Error fetching data: {e}")
+        traceback.print_exc()
         return jsonify({"error": f"Failed to fetch health data: {str(e)}"}), 500
 
 # === POST Route ===
@@ -66,17 +69,25 @@ def store_health_data():
 
         if records:
             try:
+                # TEST INSERT: to confirm DB works before batch insert
+                collection.insert_one({"test_insert": True})
+                print("✅ Test insert successful.")
+
+                # ACTUAL INSERT
                 collection.insert_many(records)
                 print(f"✅ Inserted {len(records)} records.")
                 return jsonify({"message": "Health data saved successfully!"}), 201
+
             except Exception as e:
                 print(f"❌ MongoDB insert error: {e}")
+                traceback.print_exc()
                 return jsonify({"error": "Insert failed"}), 500
         else:
             return jsonify({"error": "No valid records to store."}), 400
 
     except Exception as e:
         print(f"❌ Error storing data in MongoDB: {e}")
+        traceback.print_exc()
         return jsonify({"error": "Failed to save health data"}), 500
 
 # === Root Test Route ===
