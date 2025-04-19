@@ -5,6 +5,8 @@ import traceback
 
 app = Flask(__name__)
 
+print("📥 Incoming POST /health-data")
+
 # === MongoDB Atlas Connection ===
 MONGO_URI = os.getenv("MONGODB_URI")  # Ensure this is correctly set in Railway
 
