@@ -4,21 +4,21 @@ import os
 
 app = Flask(__name__)
 
-# Get MongoDB connection string from Railway environment variables
-MONGO_URI = os.getenv("MONGODB_URI")
+# === MongoDB Atlas Connection ===
+MONGO_URI = os.getenv("MONGODB_URI")  # Make sure this variable is set in Railway
 
 try:
-    client = MongoClient(MONGO_URI)
-    db = client.health_data 
+    client = MongoClient(MONGO_URI, tls=True, tlsAllowInvalidCertificates=True)
+    db = client.health_data
     collection = db.health_records
     client.admin.command("ping")
-    print("Successfully connected to MongoDB!")
+    print("✅ Successfully connected to MongoDB Atlas!")
 except Exception as e:
-    print(f"MongoDB Connection Failed: {e}")
+    print(f"❌ MongoDB Connection Failed: {e}")
 
+# === GET Route ===
 @app.route('/health-data', methods=['GET'])
 def get_health_data():
-    """Fetch stored health data from MongoDB for a specific user with optional date filters."""
     try:
         user_id = request.args.get("user_id")
         if not user_id:
@@ -36,7 +36,7 @@ def get_health_data():
         elif end_date:
             query["date"] = {"$lte": end_date}
 
-        print(f"Querying MongoDB with: {query}")  # Debugging log
+        print(f"🔍 Querying MongoDB with: {query}")
         data = list(collection.find(query, {"_id": 0}))
 
         if not data:
@@ -45,34 +45,46 @@ def get_health_data():
         return jsonify(data), 200
 
     except Exception as e:
-        print(f"Error fetching data: {e}")
+        print(f"❌ Error fetching data: {e}")
         return jsonify({"error": f"Failed to fetch health data: {str(e)}"}), 500
 
+# === POST Route ===
 @app.route('/health-data', methods=['POST'])
 def store_health_data():
-    """Stores health data received via API request into MongoDB."""
     try:
-        data = request.get_json()
-        
+        data = request.get_json(force=True)
+        print("📦 Received Payload:", data)
+
         if not data or "user_id" not in data or "data" not in data:
             return jsonify({"error": "Invalid JSON format. Must include 'user_id' and 'data'."}), 400
-        
+
         user_id = data["user_id"]
         health_data = data["data"]
 
         records = [{"user_id": user_id, "date": date, **values} for date, values in health_data.items()]
-        
+        print("📄 Records to insert:", records)
+
         if records:
-            collection.insert_many(records)
-            print(f"Successfully stored {len(records)} records in MongoDB!")
-            return jsonify({"message": "Health data saved successfully!"}), 201
+            try:
+                collection.insert_many(records)
+                print(f"✅ Inserted {len(records)} records.")
+                return jsonify({"message": "Health data saved successfully!"}), 201
+            except Exception as e:
+                print(f"❌ MongoDB insert error: {e}")
+                return jsonify({"error": "Insert failed"}), 500
         else:
             return jsonify({"error": "No valid records to store."}), 400
 
     except Exception as e:
-        print(f"Error storing data in MongoDB: {e}")
+        print(f"❌ Error storing data in MongoDB: {e}")
         return jsonify({"error": "Failed to save health data"}), 500
 
+# === Root Test Route ===
+@app.route("/", methods=["GET"])
+def home():
+    return "✅ Health API is running!"
+
+# === Run the server ===
 if __name__ == '__main__':
-    print("Flask API is running and connected to MongoDB...")
+    print("🚀 Flask API is starting...")
     app.run(debug=True, host="0.0.0.0", port=8080)
