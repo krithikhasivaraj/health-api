@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 # Get MongoDB connection string from Railway environment variables
-MONGO_URI = os.getenv("MONGO_URL", "mongodb://mongo:your-password@mongodb.railway.internal:27017/health_data")
+MONGO_URI = os.getenv("MONGODB_URI")
 
 try:
     client = MongoClient(MONGO_URI)
