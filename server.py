@@ -5,19 +5,19 @@ import traceback
 
 app = Flask(__name__)
 
-print("📥 Incoming POST /health-data")
+print("Incoming POST /health-data")
 
 # === MongoDB Atlas Connection ===
 MONGO_URI = os.getenv("MONGODB_URI")  # Ensure this is correctly set in Railway
 
 try:
-    client = MongoClient(MONGO_URI)  # ✅ Let pymongo auto-handle TLS
+    client = MongoClient(MONGO_URI)  # Let pymongo auto-handle TLS
     db = client.health_data
     collection = db.health_records
     client.admin.command("ping")
-    print("✅ Successfully connected to MongoDB Atlas!")
+    print("Successfully connected to MongoDB Atlas!")
 except Exception as e:
-    print(f"❌ MongoDB Connection Failed: {e}")
+    print(f"MongoDB Connection Failed: {e}")
     traceback.print_exc()
 
 
@@ -50,7 +50,7 @@ def get_health_data():
         return jsonify(data), 200
 
     except Exception as e:
-        print(f"❌ Error fetching data: {e}")
+        print(f"Error fetching data: {e}")
         traceback.print_exc()
         return jsonify({"error": f"Failed to fetch health data: {str(e)}"}), 500
 
@@ -59,7 +59,7 @@ def get_health_data():
 def store_health_data():
     try:
         data = request.get_json(force=True)
-        print("📦 Received Payload:", data)
+        print("Received Payload:", data)
 
         if not data or "user_id" not in data or "data" not in data:
             return jsonify({"error": "Invalid JSON format. Must include 'user_id' and 'data'."}), 400
@@ -68,35 +68,35 @@ def store_health_data():
         health_data = data["data"]
 
         records = [{"user_id": user_id, "date": date, **values} for date, values in health_data.items()]
-        print("📄 Records to insert:", records)
+        print("Records to insert:", records)
 
         if records:
             try:
                 # TEST INSERT: to confirm DB works before batch insert
                 collection.insert_one({"test_insert": True})
-                print("✅ Test insert successful.")
+                print("Test insert successful.")
 
                 # ACTUAL INSERT
                 collection.insert_many(records)
-                print(f"✅ Inserted {len(records)} records.")
+                print(f"Inserted {len(records)} records.")
                 return jsonify({"message": "Health data saved successfully!"}), 201
 
             except Exception as e:
-                print(f"❌ MongoDB insert error: {e}")
+                print(f"MongoDB insert error: {e}")
                 traceback.print_exc()
                 return jsonify({"error": "Insert failed"}), 500
         else:
             return jsonify({"error": "No valid records to store."}), 400
 
     except Exception as e:
-        print(f"❌ Error storing data in MongoDB: {e}")
+        print(f"Error storing data in MongoDB: {e}")
         traceback.print_exc()
         return jsonify({"error": "Failed to save health data"}), 500
 
 # === Root Test Route ===
 @app.route("/", methods=["GET"])
 def home():
-    return "✅ Health API is running!"
+    return "Health API is running!"
 
 # === Run the server ===
 if __name__ == '__main__':
